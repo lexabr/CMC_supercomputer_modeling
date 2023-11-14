@@ -32,14 +32,6 @@ int index(int i, int j, int k) {
     return Ny * Nx * k + Nx * j + i;
 }
 
-auto idx_to_ijk(int idx) {
-    int i = idx % Nx;
-    int j = (idx / Nx) % Ny;
-    int k = (idx / Nx / Ny) % Nz;
-
-    return std::make_tuple(i, j, k);
-}
-
 
 double laplace(const double **data, int st, int i, int j, int k) {
     
@@ -78,36 +70,30 @@ void assign_boundaries(double **data, int stage) {
 void init(double **data) {
 
     // t = t0
-    for (int idx = 0; idx < Nx * Ny * Nz; idx++) {
-        auto [i, j, k] = idx_to_ijk(idx);
-        data[0][idx] = func_phi(real_x(i), real_y(j), real_z(k));
-    }
+    for (int i = 0; i < Nx; i++)
+        for (int j = 0; j < Ny; j++)
+            for (int k = 0; k < Nz; k++)
+                data[0][index(i, j, k)] = func_phi(real_x(i), real_y(j), real_z(k));
 
     // t = t1
-    for (int idx = 0; idx < Nx * Ny * Nz; idx++) {
-        auto [i, j, k] = idx_to_ijk(idx);
-
-        if (i == 0 || i == Nx - 1 || j == 0 || j == Ny - 1 || k == 0 || k == Nz - 1)
-            continue;
-
-        data[1][idx] = data[0][idx] + tau * tau / 2 * laplace((const double**)data, 0, i, j, k);
-    }
+    for (int i = 1; i < Nx - 1; i++)
+        for (int j = 1; j < Ny - 1; j++)
+            for (int k = 1; k < Nz - 1; k++)
+                data[1][index(i, j, k)] = data[0][index(i, j, k)] + tau * tau / 2 * laplace((const double**)data, 0, i, j, k);
 
     assign_boundaries(data, 1);
 }
 
 void calculate(double **data) {
+
     for (int t = 2; t < K; t++) {
-        for (int idx = 0; idx < Nx * Ny * Nz; idx++) {
-            auto [i, j, k] = idx_to_ijk(idx);
-
-            if (i == 0 || i == Nx - 1 || j == 0 || j == Ny - 1 || k == 0 || k == Nz - 1)
-                continue;
-
-            data[t % num_stages][idx] = 2 * data[(t - 1) % num_stages][idx] - data[(t - 2) % num_stages][idx]
-                                        + tau * tau * a_2 * laplace((const double**)data, (t - 1) % num_stages, i, j, k);
-            assign_boundaries(data, t % num_stages);
-        }
+        for (int i = 1; i < Nx - 1; i++)
+            for (int j = 1; j < Ny - 1; j++)
+                for (int k = 1; k < Nz - 1; k++)
+                    data[t % num_stages][index(i, j, k)] = 2 * data[(t - 1) % num_stages][index(i, j, k)] - data[(t - 2) % num_stages][index(i, j, k)]
+                                                            + tau * tau * a_2 * laplace((const double**)data, (t - 1) % num_stages, i, j, k);
+        
+        assign_boundaries(data, t % num_stages);
         std::cout << "t = " << t << std::endl;
     }
 }
@@ -127,8 +113,7 @@ int main(int argc, char **argv) {
     
     Nx += 1;
     Nz += 1;
-
-    // std::cout << N << " " << Nx << " " << Ny << " " << Nz << std::endl;
+    
 
     double *data[num_stages];
     for (int st = 0; st < num_stages; st++)
@@ -136,24 +121,6 @@ int main(int argc, char **argv) {
 
     init(data);
     calculate(data);
-
-
-    // for (int n = 0; n < 2; n++) {
-    //     for (int j = 0; j < Ny; j++) {
-    //         for (int i = 0; i < Nx; i++) {
-    //             int idx = index(i, j, 0);
-    //             std::cout << data[n][idx] << " ";
-    //         }
-    //         std::cout << std::endl;
-    //     }
-    //     std::cout << std::endl;
-    // }
-
-    // std::cout << std::vector<double>(data[0], data[0] + Nx * Ny * Nz).size() << std::endl;
-    // std::cout << data[0][10] << std::endl;
-
-    // auto [i, j, k] = idx_to_ijk(20000);
-
 
     return 0;
 }
