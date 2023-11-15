@@ -1,6 +1,8 @@
 #include <iostream>
+#include <fstream>
 #include <cmath>
-#include <vector>
+#include <string>
+#include <ctime>
 
 int N, Nx, Ny, Nz;
 double Lx, Ly, Lz;
@@ -42,24 +44,25 @@ public:
     Error() {
         rmse = 0;
         max_abs = 0;
-        grid_errs = new double[(Nx - 1) * Ny * (Nz - 1)];
+        grid_errs = new double[Nx * Ny * Nz];
     }
 
     ~Error() {
         delete[] grid_errs;
     }
 
-    double get_rmse() const {return this->rmse;}
-    double get_max_abs() const {return this->max_abs;}
+    double get_rmse()       const {return this->rmse;}
+    double get_max_abs()    const {return this->max_abs;}
+    double* get_grid_errs() const {return this->grid_errs;}
 
     void calc_stage_errs(const double **data, int st) {
 
         double mse = 0;
         double max_abs = 0;
 
-        for (int i = 0; i < Nx - 1; i++)
+        for (int i = 0; i < Nx; i++)
             for (int j = 0; j < Ny; j++)
-                for (int k = 0; k < Nz - 1; k++) {
+                for (int k = 0; k < Nz; k++) {
                     double diff = func_u(real_x(i), real_y(j), real_z(k), real_t(st)) - data[st % num_stages][index(i, j, k)];
                     mse += pow(diff, 2);
 
@@ -69,24 +72,83 @@ public:
                 }
 
 
-        mse /= (Nx - 1) * Ny * (Nz - 1);
+        mse /= Nx * Ny * Nz;
 
         this->rmse = sqrt(mse);
         this->max_abs = max_abs;
+
+        this->write_stage_errs(st, st == 0);
+    }
+
+    void write_stage_errs(int st, bool truncate = false) {
+        std::ofstream file;
+        std::string filename = "./results/stage_errors_N_" + std::to_string(N) + "_.csv";
+
+        if (truncate) {
+            file.open(filename);
+            file << "t,RMSE,max_abs" << std::endl;
+        } else {
+            file.open(filename, std::ios_base::app);
+        }
+        
+        file << st << "," << this->rmse << "," << this->max_abs << std::endl;
+        file.close();
     }
 
     void calc_grid_errs(const double **data, int st) {
-
-        for (int i = 0; i < Nx - 1; i++)
+        for (int i = 0; i < Nx; i++)
             for (int j = 0; j < Ny; j++)
-                for (int k = 0; k < Nz - 1; k++)
+                for (int k = 0; k < Nz; k++)
                     this->grid_errs[index(i, j, k)] = func_u(real_x(i), real_y(j), real_z(k), real_t(st)) - data[st % num_stages][index(i, j, k)];
     }
 };
 
 
+class Timer {
+public:
+    std::clock_t start_time;
+    std::clock_t end_time;
+    std::clock_t calc_errors_time = 0;
+
+public:
+
+    void start() {this->start_time = std::clock();}
+    void end()   {this->end_time = std::clock();}
+    void add_err_time(std::clock_t et) {this->calc_errors_time += et;}
+
+    double overall_duration()           const {return (this->end_time - this->start_time) / (double)CLOCKS_PER_SEC;}
+    double calculation_duration()       const {return (this->end_time - this->start_time - this->calc_errors_time) / (double)CLOCKS_PER_SEC;}
+    double error_calculation_duration() const {return this->calc_errors_time / (double)CLOCKS_PER_SEC;}
+
+    void write_duration() {
+        std::ofstream file;
+        file.open("./results/duration_N_" + std::to_string(N) + "_.csv");
+
+        file << "ovd,cd,ecd" << std::endl;
+        file << this->overall_duration() << "," << this->calculation_duration() << "," << this->error_calculation_duration() << std::endl;
+    }
+};
+
+
+void save_grid_values(const double *data, const std::string filename) {
+    std::ofstream file;
+    file.open(filename);
+
+    for (int k = 0; k < Nz - 1; k++)
+        for (int j = 0; j < Ny; j++) {
+            for (int i = 0; i < Nx - 1; i++) {
+                file << data[index(i, j, k)];
+                if (i < Nx - 2)
+                    file << ",";
+            }
+            file << std::endl;
+        }
+    file.close();
+}
+
+
 double laplace(const double **data, int st, int i, int j, int k) {
-    
+
     return (data[st][index(i - 1, j, k)] - 2 * data[st][index(i, j, k)] + data[st][index(i + 1, j, k)]) / (hx * hx) +
            (data[st][index(i, j - 1, k)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j + 1, k)]) / (hy * hy) +
            (data[st][index(i, j, k - 1)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j, k + 1)]) / (hz * hz);
@@ -119,7 +181,7 @@ void assign_boundaries(double **data, int stage) {
     }
 }
 
-void init(double **data) {
+void init(double **data, Error &err, Timer &timer) {
 
     // t = t0
     for (int i = 0; i < Nx; i++)
@@ -127,18 +189,27 @@ void init(double **data) {
             for (int k = 0; k < Nz; k++)
                 data[0][index(i, j, k)] = func_phi(real_x(i), real_y(j), real_z(k));
 
+    clock_t err_st = std::clock();
+    err.calc_stage_errs((const double **)data, 0);
+    timer.add_err_time(std::clock() - err_st);
+
     // t = t1
     for (int i = 1; i < Nx - 1; i++)
         for (int j = 1; j < Ny - 1; j++)
             for (int k = 1; k < Nz - 1; k++)
-                data[1][index(i, j, k)] = data[0][index(i, j, k)] + tau * tau / 2 * laplace((const double**)data, 0, i, j, k);
+                data[1][index(i, j, k)] = data[0][index(i, j, k)] + tau * tau * a_2 / 2 * laplace((const double**)data, 0, i, j, k);
 
     assign_boundaries(data, 1);
+
+    err_st = std::clock();
+    err.calc_stage_errs((const double **)data, 1);
+    timer.add_err_time(std::clock() - err_st);
 }
 
-void calculate(double **data) {
-
+void calculate(double **data, Timer &timer, bool write_last_stage = false) {
     Error err;
+
+    init(data, err, timer);
 
     for (int t = 2; t < K; t++) {
         for (int i = 1; i < Nx - 1; i++)
@@ -148,15 +219,24 @@ void calculate(double **data) {
                                                             + tau * tau * a_2 * laplace((const double**)data, (t - 1) % num_stages, i, j, k);
         
         assign_boundaries(data, t % num_stages);
-        err.calc_stage_errs((const double**)data, t);
 
-        std::cout << "t = " << t << std::endl;
-        std::cout << "RMSE = " << err.get_rmse() << ", max_abs = " << err.get_max_abs() << std::endl;
+        clock_t err_st = std::clock();
+        err.calc_stage_errs((const double**)data, t);
+        timer.add_err_time(std::clock() - err_st);
     }
+
+    clock_t err_st = std::clock();
+    err.calc_grid_errs((const double**)data, K - 1);
+    if (write_last_stage)
+        save_grid_values((const double*)err.get_grid_errs(), "./results/grid_errs_N_" + std::to_string(N) + "_.csv");
+        save_grid_values((const double*)data[(K - 1) % num_stages], "./results/u_data_N_" + std::to_string(N) + "_.csv");
+    timer.add_err_time(std::clock() - err_st);
 }
 
 
 int main(int argc, char **argv) {
+    Timer timer;
+    timer.start();
 
     N = (argc > 1) ? std::atoi(argv[1]) : 128;
     Nx = Ny = Nz = N;
@@ -176,8 +256,10 @@ int main(int argc, char **argv) {
     for (int st = 0; st < num_stages; st++)
         data[st] = new double[Nx * Ny * Nz];
 
-    init(data);
-    calculate(data);
+    calculate(data, timer, false);
+    
+    timer.end();
+    timer.write_duration();
 
     return 0;
 }
