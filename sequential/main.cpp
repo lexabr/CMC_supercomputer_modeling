@@ -13,6 +13,8 @@ const double tau = 0.001;
 const int K = 20;
 const int num_stages = 3;
 
+std::string prog_postfix;
+
 
 double func_u(double x, double y, double z, double t) {
     double a_t = M_PI / 3 * sqrt(4 / pow(Lx, 2) + 1 / pow(Ly, 2) + 4 / pow(Lz, 2));
@@ -93,7 +95,7 @@ public:
 
     void write_stage_errs(int st, bool truncate = false) {
         std::ofstream file;
-        std::string filename = "./results/stage_errors_N_" + std::to_string(N) + "_.csv";
+        std::string filename = "./results/stage_errors" + prog_postfix + ".csv";
 
         if (truncate) {
             file.open(filename);
@@ -133,7 +135,7 @@ public:
 
     void write_duration() {
         std::ofstream file;
-        file.open("./results/info_N_" + std::to_string(N) + "_.txt");
+        file.open("./results/info" + prog_postfix + ".txt");
 
         file << "N = " << N << std::endl;
         file << "L = " << Lx << std::endl;
@@ -244,11 +246,11 @@ void calculate(double **data, Timer &timer, bool write_last_stage = false) {
     clock_t err_st = std::clock();
     err.calc_grid_errs((const double**)data, K - 1);
     if (write_last_stage) {
-        save_grid_values((const double*)err.get_grid_errs(), "./results/grid_errs_N_" + std::to_string(N) + "_.csv");
-        save_grid_values((const double*)data[(K - 1) % num_stages], "./results/u_data_N_" + std::to_string(N) + "_.csv");
+        save_grid_values((const double*)err.get_grid_errs(), "./results/grid_errs" + prog_postfix + ".csv");
+        save_grid_values((const double*)data[(K - 1) % num_stages], "./results/u_data" + prog_postfix + ".csv");
 
         double *real_u_data = real_u();
-        save_grid_values((const double*)real_u_data, "./results/u_real_N_" + std::to_string(N) + "_.csv");
+        save_grid_values((const double*)real_u_data, "./results/u_real" + prog_postfix + ".csv");
         delete[] real_u_data;
     }
     
@@ -261,11 +263,10 @@ int main(int argc, char **argv) {
     timer.start();
 
     N = (argc > 1) ? std::atoi(argv[1]) : 128;
+    Lx = Ly = Lz = ((argc > 2) && (std::atoi(argv[2]) == 2)) ? M_PI : 1;
+    bool need_write = (argc > 3) ? (bool)std::atoi(argv[3]) : false;
+
     Nx = Ny = Nz = N;
-
-    // Lx = Ly = Lz = (argv[2] == "pi") ? M_PI : std::atoi(argv[2]);
-    Lx = Ly = Lz = 1;
-
     hx = Lx / (N - 1);
     hy = Ly / (N - 1);
     hz = Lz / (N - 1);
@@ -273,12 +274,14 @@ int main(int argc, char **argv) {
     Nx += 1;
     Nz += 1;
 
+    prog_postfix = "_N_" + std::to_string(N) + "_L_" + ((Lx == 1) ? std::to_string(1) : "Pi");
+
 
     double *data[num_stages];
     for (int st = 0; st < num_stages; st++)
         data[st] = new double[Nx * Ny * Nz];
 
-    calculate(data, timer, false);
+    calculate(data, timer, need_write);
     
     timer.end();
     timer.write_duration();
