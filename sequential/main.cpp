@@ -27,17 +27,60 @@ double real_y(int j) {return j * hy;}
 double real_z(int k) {return k * hz;}
 double real_t(int t) {return t * tau;}
 
-
 int index(int i, int j, int k) {
     return Ny * Nx * k + Nx * j + i;
 }
 
 
+class Error {
+private:
+    double rmse;
+    double max_abs;
+    double *errs;
+
+public:
+    Error() {
+        rmse = 0;
+        max_abs = 0;
+        errs = new double[(Nx - 1) * Ny * (Nz - 1)];
+    }
+
+    ~Error() {
+        delete[] errs;
+    }
+
+    double get_rmse() const {return this->rmse;}
+    double get_max_abs() const {return this->max_abs;}
+
+    void calc_stage_errs(const double **data, int st) {
+        double mse = 0;
+        double max_abs = 0;
+
+        for (int i = 0; i < Nx - 1; i++)
+            for (int j = 0; j < Ny; j++)
+                for (int k = 0; k < Nz - 1; k++) {
+                    double diff = func_u(real_x(i), real_y(j), real_z(k), real_t(st)) - data[st % num_stages][index(i, j, k)];
+                    mse += pow(diff, 2);
+
+                    double abs_diff = fabs(diff);
+                    if (abs_diff > max_abs)
+                        max_abs = abs_diff;
+                }
+
+
+        mse /= (Nx - 1) * Ny * (Nz - 1);
+
+        this->rmse = sqrt(mse);
+        this->max_abs = max_abs;
+    }
+};
+
+
 double laplace(const double **data, int st, int i, int j, int k) {
     
-    return data[st][index(i - 1, j, k)] - 2 * data[st][index(i, j, k)] + data[st][index(i + 1, j, k)] / hx / hx +
-           data[st][index(i, j - 1, k)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j + 1, k)] / hy / hy +
-           data[st][index(i, j, k - 1)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j, k + 1)] / hz / hz;
+    return (data[st][index(i - 1, j, k)] - 2 * data[st][index(i, j, k)] + data[st][index(i + 1, j, k)]) / (hx * hx) +
+           (data[st][index(i, j - 1, k)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j + 1, k)]) / (hy * hy) +
+           (data[st][index(i, j, k - 1)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j, k + 1)]) / (hz * hz);
 }
 
 
@@ -86,15 +129,20 @@ void init(double **data) {
 
 void calculate(double **data) {
 
+    Error err;
+
     for (int t = 2; t < K; t++) {
         for (int i = 1; i < Nx - 1; i++)
             for (int j = 1; j < Ny - 1; j++)
-                for (int k = 1; k < Nz - 1; k++)
+                for (int k = 1; k < Nz - 1; k++) 
                     data[t % num_stages][index(i, j, k)] = 2 * data[(t - 1) % num_stages][index(i, j, k)] - data[(t - 2) % num_stages][index(i, j, k)]
                                                             + tau * tau * a_2 * laplace((const double**)data, (t - 1) % num_stages, i, j, k);
         
         assign_boundaries(data, t % num_stages);
+        err.calc_stage_errs((const double**)data, t);
+
         std::cout << "t = " << t << std::endl;
+        std::cout << "RMSE = " << err.get_rmse() << ", max_abs = " << err.get_max_abs() << std::endl;
     }
 }
 
@@ -107,13 +155,13 @@ int main(int argc, char **argv) {
     // Lx = Ly = Lz = (argv[2] == "pi") ? M_PI : std::atoi(argv[2]);
     Lx = Ly = Lz = 1;
 
-    hx = Lx / (Nx - 1);
-    hy = Ly / (Ny - 1);
-    hz = Lz / (Nz - 1);
+    hx = Lx / (N - 1);
+    hy = Ly / (N - 1);
+    hz = Lz / (N - 1);
     
     Nx += 1;
     Nz += 1;
-    
+
 
     double *data[num_stages];
     for (int st = 0; st < num_stages; st++)
