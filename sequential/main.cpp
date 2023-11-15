@@ -36,23 +36,24 @@ class Error {
 private:
     double rmse;
     double max_abs;
-    double *errs;
+    double *grid_errs;
 
 public:
     Error() {
         rmse = 0;
         max_abs = 0;
-        errs = new double[(Nx - 1) * Ny * (Nz - 1)];
+        grid_errs = new double[(Nx - 1) * Ny * (Nz - 1)];
     }
 
     ~Error() {
-        delete[] errs;
+        delete[] grid_errs;
     }
 
     double get_rmse() const {return this->rmse;}
     double get_max_abs() const {return this->max_abs;}
 
     void calc_stage_errs(const double **data, int st) {
+
         double mse = 0;
         double max_abs = 0;
 
@@ -72,6 +73,14 @@ public:
 
         this->rmse = sqrt(mse);
         this->max_abs = max_abs;
+    }
+
+    void calc_grid_errs(const double **data, int st) {
+
+        for (int i = 0; i < Nx - 1; i++)
+            for (int j = 0; j < Ny; j++)
+                for (int k = 0; k < Nz - 1; k++)
+                    this->grid_errs[index(i, j, k)] = func_u(real_x(i), real_y(j), real_z(k), real_t(st)) - data[st % num_stages][index(i, j, k)];
     }
 };
 
