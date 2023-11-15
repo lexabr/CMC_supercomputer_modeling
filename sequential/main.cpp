@@ -33,6 +33,17 @@ int index(int i, int j, int k) {
     return Ny * Nx * k + Nx * j + i;
 }
 
+double* real_u() {
+    double *u_data = new double[Nx * Ny * Nz];
+
+    for (int i = 0; i < Nx; i++)
+        for (int j = 0; j < Ny; j++)
+            for (int k = 0; k < Nz; k++)
+                u_data[index(i, j, k)] = func_u(real_x(i), real_y(j), real_z(k), real_t(K - 1));
+    
+    return u_data;
+}
+
 
 class Error {
 private:
@@ -227,9 +238,15 @@ void calculate(double **data, Timer &timer, bool write_last_stage = false) {
 
     clock_t err_st = std::clock();
     err.calc_grid_errs((const double**)data, K - 1);
-    if (write_last_stage)
+    if (write_last_stage) {
         save_grid_values((const double*)err.get_grid_errs(), "./results/grid_errs_N_" + std::to_string(N) + "_.csv");
         save_grid_values((const double*)data[(K - 1) % num_stages], "./results/u_data_N_" + std::to_string(N) + "_.csv");
+
+        double *real_u_data = real_u();
+        save_grid_values((const double*)real_u_data, "./results/u_real_N_" + std::to_string(N) + "_.csv");
+        delete[] real_u_data;
+    }
+    
     timer.add_err_time(std::clock() - err_st);
 }
 
