@@ -2,6 +2,6 @@
 test.cpp
 test.o
 settings.json
-./sequential/main.o
+*.o
 */results/*
 !*/results/.gitkeep
