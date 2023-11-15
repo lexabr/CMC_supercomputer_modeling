@@ -133,10 +133,15 @@ public:
 
     void write_duration() {
         std::ofstream file;
-        file.open("./results/duration_N_" + std::to_string(N) + "_.csv");
+        file.open("./results/info_N_" + std::to_string(N) + "_.txt");
 
-        file << "ovd,cd,ecd" << std::endl;
-        file << this->overall_duration() << "," << this->calculation_duration() << "," << this->error_calculation_duration() << std::endl;
+        file << "N = " << N << std::endl;
+        file << "L = " << Lx << std::endl;
+        file << "K = " << K << std::endl;
+        file << "tau = " << tau << std::endl;
+        file << "Total dur (s): " << this->overall_duration() << std::endl;
+        file << "Calculations dur (s): " << this->calculation_duration() << std::endl;
+        file << "Error calculations & file writing dur (s): " << this->error_calculation_duration() << std::endl;
     }
 };
 
