@@ -1,0 +1,7 @@
+*.DS_Store
+test.cpp
+test.o
+settings.json
+./sequential/main.o
+*/results/*
+!*/results/.gitkeep
