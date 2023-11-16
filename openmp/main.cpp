@@ -273,6 +273,7 @@ int main(int argc, char **argv) {
     N = (argc > 1) ? std::atoi(argv[1]) : 128;
     Lx = Ly = Lz = ((argc > 2) && (std::atoi(argv[2]) == 2)) ? M_PI : 1;
     bool need_write = (argc > 3) ? (bool)std::atoi(argv[3]) : false;
+    int num_threads = (argc > 4) ? std::atoi(argv[4]) : 1;
 
     Nx = Ny = Nz = N;
     hx = Lx / (N - 1);
@@ -282,7 +283,7 @@ int main(int argc, char **argv) {
     Nx += 1;
     Nz += 1;
 
-    prog_postfix = "_N_" + std::to_string(N) + "_L_" + ((Lx == 1) ? std::to_string(1) : "Pi");
+    prog_postfix = "_N_" + std::to_string(N) + "_L_" + ((Lx == 1) ? std::to_string(1) : "Pi") + "_Th_" + std::to_string(num_threads);
 
     double *data[num_stages];
     for (int st = 0; st < num_stages; st++)
