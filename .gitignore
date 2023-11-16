@@ -5,3 +5,4 @@ settings.json
 *.o
 */results/*
 !*/results/.gitkeep
+analyze_results/openmp/data/*
