@@ -2,7 +2,6 @@
 #include <fstream>
 #include <cmath>
 #include <string>
-// #include <ctime>
 #include <omp.h>
 
 int N, Nx, Ny, Nz;
@@ -293,7 +292,6 @@ int main(int argc, char **argv) {
     
     timer.end();
     timer.write_duration();
-    std::cout << timer.overall_duration() << std::endl;
 
     return 0;
 }
