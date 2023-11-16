@@ -6,3 +6,5 @@ settings.json
 */results/*
 !*/results/.gitkeep
 analyze_results/openmp/data/*
+*report*
+*checkpoint*
