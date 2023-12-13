@@ -162,7 +162,7 @@ public:
 
     void write_duration() {
         std::ofstream file;
-        file.open("./results/info" + prog_postfix + ".txt");
+        file.open("./results/info" + prog_postfix + ".txt", std::ios_base::app);
 
         file << "N = " << N << std::endl;
         file << "L = " << Lx << std::endl;
@@ -170,7 +170,7 @@ public:
         file << "tau = " << tau << std::endl;
         file << "Total dur (s): " << this->get_overall_duration() << std::endl;
         file << "Calculations dur (s): " << this->get_calculation_duration() << std::endl;
-        file << "Error calculations & file writing dur (s): " << this->get_error_calculation_duration() << std::endl;
+        file << "Error calculations & file writing dur (s): " << this->get_error_calculation_duration() << std::endl << std::endl;
     }
 };
 
@@ -218,7 +218,7 @@ void send_recv_right(double *data, int axis, int bound_cond, MPI_Comm& comm_cart
     double send_buf[size], recv_buf[size];
     MPI_Status comm_status;
 
-    // #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < dim1; i++)
         for (int j = 0; j < dim2; j++) {
             int idx;
@@ -242,6 +242,7 @@ void send_recv_right(double *data, int axis, int bound_cond, MPI_Comm& comm_cart
                  recv_buf, size, MPI_DOUBLE, rank_prev, 1,
                  comm_cart, &comm_status);
 
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < dim1; i++)
         for (int j = 0; j < dim2; j++) {
             int idx;
@@ -289,7 +290,7 @@ void send_recv_left(double *data, int axis, int bound_cond, MPI_Comm& comm_cart,
     double send_buf[size], recv_buf[size];
     MPI_Status comm_status;
 
-    // #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < dim1; i++)
         for (int j = 0; j < dim2; j++) {
             int idx;
@@ -313,7 +314,7 @@ void send_recv_left(double *data, int axis, int bound_cond, MPI_Comm& comm_cart,
                  recv_buf, size, MPI_DOUBLE, rank_next, 1,
                  comm_cart, &comm_status);
 
-    // #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < dim1; i++)
         for (int j = 0; j < dim2; j++) {
             int idx;
@@ -336,7 +337,7 @@ void send_recv_left(double *data, int axis, int bound_cond, MPI_Comm& comm_cart,
 
 void send_recv(double *data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[], int rank_next[], bool is_first[], bool is_last[]) {
 
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (int d = 0; d < ndim; d++) {
         send_recv_right(data, d, bound_cond[d], comm_cart, rank_prev[d], rank_next[d], is_first[d], is_last[d]);
         send_recv_left(data, d, bound_cond[d], comm_cart, rank_prev[d], rank_next[d], is_first[d], is_last[d]);
@@ -346,7 +347,7 @@ void send_recv(double *data, MPI_Comm& comm_cart, int bound_cond[], int rank_pre
 
 void assign_boundaries(double **data, int stage, bool is_first[], bool is_last[]) {
     // x
-    // #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int j = 0; j < Ny; j++) {
         for (int k = 0; k < Nz; k++) {
             if (is_first[0] && is_last[0]) {
@@ -361,7 +362,7 @@ void assign_boundaries(double **data, int stage, bool is_first[], bool is_last[]
     }
 
     // y
-    // #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < Nx; i++) {
         for (int k = 0; k < Nz; k++) {
             if (is_first[1])
@@ -372,7 +373,7 @@ void assign_boundaries(double **data, int stage, bool is_first[], bool is_last[]
     }
 
     // z
-    // #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < Nx; i++) {
         for (int j = 0; j < Ny; j++) {
             if (is_first[2] && is_last[2]) {
@@ -391,7 +392,7 @@ void init(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[],
             bool is_first[], bool is_last[], Timer& timer) {//, Error &err, Timer &timer) {
 
     // t = t0
-    // #pragma omp parallel for collapse(3)
+    #pragma omp parallel for collapse(3)
     for (int i = 1; i < Nx - 1; i++)
         for (int j = 1; j < Ny - 1; j++)
             for (int k = 1; k < Nz - 1; k++)
@@ -402,7 +403,7 @@ void init(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[],
     timer.add_err_time(MPI_Wtime() - err_st);
 
     // t = t1
-    // #pragma omp parallel for collapse(3)
+    #pragma omp parallel for collapse(3)
     for (int i = 1; i < Nx - 1; i++)
         for (int j = 1; j < Ny - 1; j++)
             for (int k = 1; k < Nz - 1; k++) {
@@ -550,7 +551,7 @@ int main(int argc, char **argv) {
     Ny = j_max - j_min + 3;
     Nz = k_max - k_min + 3;
 
-    // prog_postfix = "_N_" + std::to_string(N) + "_L_" + ((Lx == 1) ? std::to_string(1) : "Pi") + "_Th_" + std::to_string(num_threads);
+    prog_postfix = "_N_" + std::to_string(N) + "_L_" + ((Lx == 1) ? std::to_string(1) : "Pi") + "_P_" + std::to_string(nproc) + "_Th_" + std::to_string(num_threads);
 
     double *data[num_stages];
     for (int st = 0; st < num_stages; st++)
@@ -576,9 +577,10 @@ int main(int argc, char **argv) {
     MPI_Reduce(&timer_proc.calc_dur, &timer_all.calc_dur, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
     MPI_Reduce(&timer_proc.calc_errors_time, &timer_all.calc_errors_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
 
-    std::cout << timer_proc.get_overall_duration() << " " << timer_proc.get_calculation_duration() << " " << timer_proc.get_error_calculation_duration() << std::endl;
+    // std::cout << timer_proc.get_overall_duration() << " " << timer_proc.get_calculation_duration() << " " << timer_proc.get_error_calculation_duration() << std::endl;
     if (rank == 0)
-        std::cout << "gg " << timer_all.get_overall_duration() << " " << timer_all.get_calculation_duration() << " " << timer_all.get_error_calculation_duration() << std::endl;
+        timer_all.write_duration();
+    //     std::cout << "gg " << timer_all.get_overall_duration() << " " << timer_all.get_calculation_duration() << " " << timer_all.get_error_calculation_duration() << std::endl;
 
     MPI_Finalize();
     
