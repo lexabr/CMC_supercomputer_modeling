@@ -194,7 +194,6 @@ void save_grid_values(const double *data, const std::string filename) {
             }
             file << std::endl;
         }
-        file << "\n";
     }
     file.close();
 }
