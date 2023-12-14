@@ -345,7 +345,6 @@ void send_recv_left(double *data, int axis, int bound_cond, MPI_Comm& comm_cart,
 
 void send_recv(double *data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[], int rank_next[], bool is_first[], bool is_last[]) {
 
-    #pragma omp parallel for
     for (int d = 0; d < ndim; d++) {
         send_recv_right(data, d, bound_cond[d], comm_cart, rank_prev[d], rank_next[d], is_first[d], is_last[d]);
         send_recv_left(data, d, bound_cond[d], comm_cart, rank_prev[d], rank_next[d], is_first[d], is_last[d]);
@@ -590,16 +589,8 @@ int main(int argc, char **argv) {
     double *data[num_stages];
     for (int st = 0; st < num_stages; st++)
         data[st] = new double[Nx * Ny * Nz];
-    // std::cout << rank << " " << Nx * Ny * Nz << std::endl;
 
-    // std::cout << "Process: " << rank << std::endl;
-    // for (int j = 0; j < Ny; j++) {
-    //     for (int i = 0; i < Nx; i++) {
-    //         std::cout << data[1][index(i, j, 1)] << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // std::cout << std::endl;
+
     calculate(data, comm_cart, boundary_conditions, rank_prev, rank_next, is_first, is_last, timer_proc, need_write);
 
     timer_proc.end();
