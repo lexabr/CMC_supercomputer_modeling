@@ -14,7 +14,8 @@ const double a_2 = 1/9;
 const double tau = 0.001;
 const int K = 20;
 const int num_stages = 3;
-int ndim = 3;
+const int ndim = 3;
+int coords[ndim];
 
 std::string prog_postfix;
 
@@ -51,87 +52,90 @@ double laplace(const double **data, int st, int i, int j, int k) {
            (data[st][index(i, j, k - 1)] - 2 * data[st][index(i, j, k)] + data[st][index(i, j, k + 1)]) / (hz * hz);
 }
 
-// double* real_u() {
-//     double *u_data = new double[Nx * Ny * Nz];
+double* real_u() {
+    double *u_data = new double[Nx * Ny * Nz];
 
-//     #pragma omp parallel for collapse(3)
-//     for (int i = 0; i < Nx; i++)
-//         for (int j = 0; j < Ny; j++)
-//             for (int k = 0; k < Nz; k++)
-//                 u_data[index(i, j, k)] = func_u(real_x(i), real_y(j), real_z(k), real_t(K - 1));
+    #pragma omp parallel for collapse(3)
+    for (int i = 0; i < Nx; i++)
+        for (int j = 0; j < Ny; j++)
+            for (int k = 0; k < Nz; k++)
+                u_data[index(i, j, k)] = func_u(real_x(i_min + i - 1), real_y(j_min + j - 1), real_z(k_min + k - 1), real_t(K - 1));
     
-//     return u_data;
-// }
+    return u_data;
+}
 
 
-// class Error {
-// private:
-//     double rmse;
-//     double max_abs;
-//     double *grid_errs;
+class Error {
+public:
+    double rmse;
+    double block_mse;
+    double max_abs;
+    double *grid_errs;
 
-// public:
-//     Error() {
-//         rmse = 0;
-//         max_abs = 0;
-//         grid_errs = new double[Nx * Ny * Nz];
-//     }
+public:
+    Error() {
+        rmse = 0;
+        max_abs = 0;
+        grid_errs = new double[Nx * Ny * Nz];
+    }
 
-//     ~Error() {
-//         delete[] grid_errs;
-//     }
+    ~Error() {
+        delete[] grid_errs;
+    }
 
-//     double get_rmse()       const {return this->rmse;}
-//     double get_max_abs()    const {return this->max_abs;}
-//     double* get_grid_errs() const {return this->grid_errs;}
+    double get_rmse()       const {return this->rmse;}
+    double get_max_abs()    const {return this->max_abs;}
+    double* get_grid_errs() const {return this->grid_errs;}
 
-//     void calc_stage_errs(const double **data, int st) {
+    void calc_stage_errs(const double **data, int st) {
 
-//         double mse = 0;
-//         double max_abs = 0;
+        double mse = 0;
+        double max_abs = 0;
         
-//         #pragma omp parallel for collapse(3) reduction(+:mse) reduction(max: max_abs)
-//         for (int i = 0; i < Nx; i++)
-//             for (int j = 0; j < Ny; j++)
-//                 for (int k = 0; k < Nz; k++) {
-//                     double diff = func_u(real_x(i), real_y(j), real_z(k), real_t(st)) - data[st % num_stages][index(i, j, k)];
-//                     mse += pow(diff, 2);
+        #pragma omp parallel for collapse(3) reduction(+:mse) reduction(max: max_abs)
+        for (int i = 1; i < Nx - 1; i++)
+            for (int j = 1; j < Ny - 1; j++)
+                for (int k = 1; k < Nz - 1; k++) {
+                    double diff = func_u(real_x(i_min + i - 1), real_y(j_min + j - 1), real_z(k_min + k - 1), real_t(st)) - data[st % num_stages][index(i, j, k)];
+                    mse += pow(diff, 2);
 
-//                     max_abs = std::max(max_abs, fabs(diff));
-//                 }
+                    max_abs = std::max(max_abs, fabs(diff));
+                }
 
 
-//         mse /= Nx * Ny * Nz;
+        // mse /= Nx * Ny * Nz;
 
-//         this->rmse = sqrt(mse);
-//         this->max_abs = max_abs;
+        this->block_mse = mse;
+        this->max_abs = max_abs;
 
-//         this->write_stage_errs(st, st == 0);
-//     }
+        // this->write_stage_errs(st, st == 0);
+    }
 
-//     void write_stage_errs(int st, bool truncate = false) {
-//         std::ofstream file;
-//         std::string filename = "./results/stage_errors" + prog_postfix + ".csv";
+    void normalize_block_mse() {this->rmse = sqrt(this->block_mse / pow(N, 3));}
 
-//         if (truncate) {
-//             file.open(filename);
-//             file << "t,RMSE,max_abs" << std::endl;
-//         } else {
-//             file.open(filename, std::ios_base::app);
-//         }
+    void write_stage_errs(int st, bool truncate = false) {
+        std::ofstream file;
+        std::string filename = "./results/stage_errors" + prog_postfix + ".csv";
+
+        if (truncate) {
+            file.open(filename);
+            file << "t,RMSE,max_abs" << std::endl;
+        } else {
+            file.open(filename, std::ios_base::app);
+        }
         
-//         file << st << "," << this->rmse << "," << this->max_abs << std::endl;
-//         file.close();
-//     }
+        file << st << "," << this->rmse << "," << this->max_abs << std::endl;
+        file.close();
+    }
 
-//     void calc_grid_errs(const double **data, int st) {
-//         #pragma omp parallel for collapse(3)
-//         for (int i = 0; i < Nx; i++)
-//             for (int j = 0; j < Ny; j++)
-//                 for (int k = 0; k < Nz; k++)
-//                     this->grid_errs[index(i, j, k)] = func_u(real_x(i), real_y(j), real_z(k), real_t(st)) - data[st % num_stages][index(i, j, k)];
-//     }
-// };
+    void calc_grid_errs(const double **data, int st) {
+        #pragma omp parallel for collapse(3)
+        for (int i = 1; i < Nx - 1; i++)
+            for (int j = 1; j < Ny - 1; j++)
+                for (int k = 1; k < Nz - 1; k++)
+                    this->grid_errs[index(i, j, k)] = func_u(real_x(i_min + i - 1), real_y(j_min + j - 1), real_z(k_min + k - 1), real_t(st)) - data[st % num_stages][index(i, j, k)];
+    }
+};
 
 
 class Timer {
@@ -175,21 +179,25 @@ public:
 };
 
 
-// void save_grid_values(const double *data, const std::string filename) {
-//     std::ofstream file;
-//     file.open(filename);
+void save_grid_values(const double *data, const std::string filename) {
+    std::ofstream file;
+    file.open(filename);
+    // std::cout << Nx << " " << Ny << " " << Nz << std::endl;
 
-//     for (int k = 0; k < Nz - 1; k++)
-//         for (int j = 0; j < Ny; j++) {
-//             for (int i = 0; i < Nx - 1; i++) {
-//                 file << data[index(i, j, k)];
-//                 if (i < Nx - 2)
-//                     file << ",";
-//             }
-//             file << std::endl;
-//         }
-//     file.close();
-// }
+    for (int k = 1; k < Nz - 1; k++) {
+        for (int j = 1; j < Ny - 1; j++) {
+            file << coords[0] << "," << coords[1] << "," << coords[2] << ",";
+            for (int i = 1; i < Nx - 1; i++) {
+                file << data[index(i, j, k)];
+                if (i < Nx - 3)
+                    file << ",";
+            }
+            file << std::endl;
+        }
+        file << "\n";
+    }
+    file.close();
+}
 
 
 void send_recv_right(double *data, int axis, int bound_cond, MPI_Comm& comm_cart, int rank_prev, int rank_next, bool is_first, bool is_last) {
@@ -389,7 +397,9 @@ void assign_boundaries(double **data, int stage, bool is_first[], bool is_last[]
 }
 
 void init(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[], int rank_next[],
-            bool is_first[], bool is_last[], Timer& timer) {//, Error &err, Timer &timer) {
+            bool is_first[], bool is_last[], Timer& timer) {
+
+    Error err_proc, err_all;
 
     // t = t0
     #pragma omp parallel for collapse(3)
@@ -399,7 +409,16 @@ void init(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[],
                 data[0][index(i, j, k)] = func_phi(real_x(i_min + i - 1), real_y(j_min + j - 1), real_z(k_min + k - 1)); // -1 из-за левой обменной области
 
     double err_st = MPI_Wtime();
-    // err.calc_stage_errs((const double **)data, 0);
+    err_proc.calc_stage_errs((const double **)data, 0);
+
+    MPI_Reduce(&err_proc.block_mse, &err_all.block_mse, 1, MPI_DOUBLE, MPI_SUM, 0, comm_cart);
+    MPI_Reduce(&err_proc.max_abs, &err_all.max_abs, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
+
+    if (rank == 0) {
+        err_all.normalize_block_mse();
+        err_all.write_stage_errs(0, true);
+    }
+    
     timer.add_err_time(MPI_Wtime() - err_st);
 
     // t = t1
@@ -422,13 +441,23 @@ void init(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[],
     assign_boundaries(data, 1, is_first, is_last);
 
     err_st = MPI_Wtime();
-    // err.calc_stage_errs((const double **)data, 1);
+    err_proc.calc_stage_errs((const double **)data, 1);
+
+    MPI_Reduce(&err_proc.block_mse, &err_all.block_mse, 1, MPI_DOUBLE, MPI_SUM, 0, comm_cart);
+    MPI_Reduce(&err_proc.max_abs, &err_all.max_abs, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
+
+    if (rank == 0) {
+        err_all.normalize_block_mse();
+        err_all.write_stage_errs(1, false);
+    }
+
     timer.add_err_time(MPI_Wtime() - err_st);
 }
 
 void calculate(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_prev[], int rank_next[],
-                bool is_first[], bool is_last[], Timer& timer) {
-    // Error err;
+                bool is_first[], bool is_last[], Timer& timer, bool write_last_stage = false) {
+    
+    Error err_proc, err_all;
 
     init(data, comm_cart, bound_cond, rank_prev, rank_next, is_first, is_last, timer);
 
@@ -452,22 +481,32 @@ void calculate(double **data, MPI_Comm& comm_cart, int bound_cond[], int rank_pr
         assign_boundaries(data, t % num_stages, is_first, is_last);
 
         double err_st = MPI_Wtime();
-        // err.calc_stage_errs((const double**)data, t);
+        err_proc.calc_stage_errs((const double **)data, t);
+
+        MPI_Reduce(&err_proc.block_mse, &err_all.block_mse, 1, MPI_DOUBLE, MPI_SUM, 0, comm_cart);
+        MPI_Reduce(&err_proc.max_abs, &err_all.max_abs, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
+
+        if (rank == 0) {
+            err_all.normalize_block_mse();
+            err_all.write_stage_errs(t, false);
+        }
+
         timer.add_err_time(MPI_Wtime() - err_st);
     }
 
-    // double err_st = omp_get_wtime();
-    // err.calc_grid_errs((const double**)data, K - 1);
-    // if (write_last_stage) {
-    //     save_grid_values((const double*)err.get_grid_errs(), "./results/grid_errs" + prog_postfix + ".csv");
-    //     save_grid_values((const double*)data[(K - 1) % num_stages], "./results/u_data" + prog_postfix + ".csv");
+    double err_st = MPI_Wtime();
+    err_proc.calc_grid_errs((const double**)data, K - 1);
+    if (write_last_stage) {
+        std::string coord = "_" + std::to_string(coords[0]) + "_" + std::to_string(coords[1]) + "_" + std::to_string(coords[2]) + "_";
+        save_grid_values((const double*)err_proc.get_grid_errs(), "./results/grid_errs" + prog_postfix + coord + ".csv");
+        save_grid_values((const double*)data[(K - 1) % num_stages], "./results/u_data" + prog_postfix + coord + ".csv");
 
-    //     double *real_u_data = real_u();
-    //     save_grid_values((const double*)real_u_data, "./results/u_real" + prog_postfix + ".csv");
-    //     delete[] real_u_data;
-    // }
+        double *real_u_data = real_u();
+        save_grid_values((const double*)real_u_data, "./results/u_real" + prog_postfix + coord + ".csv");
+        delete[] real_u_data;
+    }
     
-    // timer.add_err_time(omp_get_wtime() - err_st);
+    timer.add_err_time(MPI_Wtime() - err_st);
 }
 
 
@@ -524,7 +563,7 @@ int main(int argc, char **argv) {
     MPI_Cart_create(MPI_COMM_WORLD, ndim, dims, periods, 0, &comm_cart);
 
     // координаты блока внутри решетки
-    int coords[ndim];
+    // int coords[ndim];
     MPI_Cart_coords(comm_cart, rank, ndim, coords);
 
     // ранги соседей по каждой оси для обменов
@@ -566,7 +605,7 @@ int main(int argc, char **argv) {
     //     std::cout << std::endl;
     // }
     // std::cout << std::endl;
-    calculate(data, comm_cart, boundary_conditions, rank_prev, rank_next, is_first, is_last, timer_proc);
+    calculate(data, comm_cart, boundary_conditions, rank_prev, rank_next, is_first, is_last, timer_proc, need_write);
 
     timer_proc.end();
 
@@ -578,8 +617,8 @@ int main(int argc, char **argv) {
     MPI_Reduce(&timer_proc.calc_errors_time, &timer_all.calc_errors_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
 
     // std::cout << timer_proc.get_overall_duration() << " " << timer_proc.get_calculation_duration() << " " << timer_proc.get_error_calculation_duration() << std::endl;
-    if (rank == 0)
-        timer_all.write_duration();
+    // if (rank == 0)
+    //     timer_all.write_duration();
     //     std::cout << "gg " << timer_all.get_overall_duration() << " " << timer_all.get_calculation_duration() << " " << timer_all.get_error_calculation_duration() << std::endl;
 
     MPI_Finalize();
