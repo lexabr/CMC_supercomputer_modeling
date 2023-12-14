@@ -546,11 +546,6 @@ int main(int argc, char **argv) {
     // вычисление оптимальных размерностей решетки
     MPI_Dims_create(nproc, ndim, dims);
 
-    // if (rank == 0) {
-    //     for (int i = 0; i < ndim; i++)
-    //         std::cout << dims[i];
-    //     std::cout << std::endl << std::endl;;
-    // }
 
     // число узлов сетки внутри блока
     int nodes[ndim];
@@ -616,14 +611,10 @@ int main(int argc, char **argv) {
     MPI_Reduce(&timer_proc.calc_dur, &timer_all.calc_dur, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
     MPI_Reduce(&timer_proc.calc_errors_time, &timer_all.calc_errors_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm_cart);
 
-    // std::cout << timer_proc.get_overall_duration() << " " << timer_proc.get_calculation_duration() << " " << timer_proc.get_error_calculation_duration() << std::endl;
-    // if (rank == 0)
-    //     timer_all.write_duration();
-    //     std::cout << "gg " << timer_all.get_overall_duration() << " " << timer_all.get_calculation_duration() << " " << timer_all.get_error_calculation_duration() << std::endl;
+    if (rank == 0)
+        timer_all.write_duration();
 
     MPI_Finalize();
-    
-    // timer.write_duration();
 
     return 0;
 }
